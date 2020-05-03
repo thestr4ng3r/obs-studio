@@ -53,7 +53,14 @@ struct gs_stage_surface {
 
 };
 
+struct gs_swap_chain {
+	gs_device_t *device;
+	struct gs_init_data info;
+	struct cpu_windowinfo *wi;
+};
+
 struct gs_device {
+	struct cpu_platform *plat;
 	struct {
 		enum gs_blend_type src_c;
 		enum gs_blend_type dest_c;
@@ -79,4 +86,12 @@ struct gs_device {
 	gs_shader_t *fragment_shader_cur;
 	gs_vertbuffer_t *vertex_buffer_cur;
 	gs_indexbuffer_t *index_buffer_cur;
+	gs_swapchain_t *swapchain_cur;
 };
+
+bool cpu_platform_init_swapchain(struct gs_swap_chain *swap);
+void cpu_platform_fini_swapchain(struct gs_swap_chain *swap);
+void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, uint32_t height);
+struct cpu_platform *cpu_platform_create(gs_device_t *device, uint32_t adapter);
+void cpu_platform_destroy(struct cpu_platform *plat);
+void cpu_platform_draw(struct gs_device *device);

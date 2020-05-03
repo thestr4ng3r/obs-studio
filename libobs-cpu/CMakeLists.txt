@@ -2,9 +2,12 @@ project(libobs-cpu)
 
 add_definitions(-DLIBOBS_EXPORTS)
 
-set(libobs-cpu_SOURCES cpu-subsystem.c)
+set(libobs-cpu_HEADERS
+		cpu-subsystem.h)
 
-set(libobs-cpu_HEADERS cpu-subsystem.h)
+set(libobs-cpu_SOURCES
+		cpu-subsystem.c
+		cpu-x11.c)
 
 add_library(libobs-cpu SHARED
 	${libobs-cpu_SOURCES}

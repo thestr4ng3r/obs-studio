@@ -43,10 +43,21 @@ int device_create(gs_device_t **p_device, uint32_t adapter)
 	blog(LOG_INFO, "---------------------------------");
 	blog(LOG_INFO, "Initializing CPU Renderer...");
 
+	device->plat = cpu_platform_create(device, adapter);
+	if (!device->plat)
+		goto fail;
+
 	blog(LOG_INFO, "CPU Renderer loaded.");
 
 	*p_device = device;
 	return GS_SUCCESS;
+
+fail:
+	blog(LOG_ERROR, "device_create (CPU) failed");
+	bfree(device);
+
+	*p_device = NULL;
+	return errorcode;
 }
 
 void device_destroy(gs_device_t *device)
@@ -142,6 +153,11 @@ void gs_shader_get_param_info(const gs_sparam_t *param, struct gs_shader_param_i
 	// TODO
 	info->type = GS_SHADER_PARAM_UNKNOWN;
 	info->name = "unknown";
+}
+
+void gs_shader_set_val(gs_sparam_t *param, const void *val, size_t size)
+{
+	// TODO
 }
 
 gs_samplerstate_t *device_samplerstate_create(gs_device_t *device, const struct gs_sampler_info *info)
@@ -308,12 +324,59 @@ void device_set_viewport(gs_device_t *device, int x, int y, int width, int heigh
 void device_draw(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
 {
 	// TODO: Do the heavy stuff here
-	blog(LOG_ERROR, "CPU Drawing unimplemented.");
+	blog(LOG_ERROR, "CPU Drawing unimplemented: %p %p", device->render_target.tex, device->render_target.zstencil);
+	if(!device->render_target.tex)
+	{
+		// Draw to swapchain
+		cpu_platform_draw(device);
+	}
+}
+
+gs_swapchain_t *device_swapchain_create(gs_device_t *device, const struct gs_init_data *info)
+{
+	struct gs_swap_chain *swap = bzalloc(sizeof(struct gs_swap_chain));
+
+	swap->device = device;
+	swap->info = *info;
+
+	if(!cpu_platform_init_swapchain(swap))
+	{
+		blog(LOG_ERROR, "cpu_platform_init_swapchain failed");
+		gs_swapchain_destroy(swap);
+		return NULL;
+	}
+
+	return swap;
+}
+
+void gs_swapchain_destroy(gs_swapchain_t *swapchain)
+{
+	if (!swapchain)
+		return;
+
+	if (swapchain->device->swapchain_cur == swapchain)
+		device_load_swapchain(swapchain->device, NULL);
+
+	cpu_platform_fini_swapchain(swapchain);
+	bfree(swapchain);
+}
+
+void device_load_swapchain(gs_device_t *device, gs_swapchain_t *swap)
+{
+	device->swapchain_cur = swap;
+}
+
+void device_resize(gs_device_t *device, uint32_t cx, uint32_t cy)
+{
+	if(!device->swapchain_cur)
+	{
+		blog(LOG_ERROR, "No current swapchain");
+		return;
+	}
+	cpu_platform_resize_swapchain(device->swapchain_cur, cx, cy);
 }
 
 void *device_get_device_obj(gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
-gs_swapchain_t *device_swapchain_create(gs_device_t *device, const struct gs_init_data *info) {	UNIMPLEMENTED_RET(NULL) }
-void device_resize(gs_device_t *device, uint32_t cx, uint32_t cy) { UNIMPLEMENTED }
 void device_get_size(const gs_device_t *device, uint32_t *cx, uint32_t *cy) { UNIMPLEMENTED }
 uint32_t device_get_width(const gs_device_t *device) { UNIMPLEMENTED_RET(0) }
 uint32_t device_get_height(const gs_device_t *device) { UNIMPLEMENTED_RET(0) }
@@ -353,5 +416,4 @@ gs_texture_t *device_voltexture_create(gs_device_t *device, uint32_t width, uint
 gs_zstencil_t *device_zstencil_create(gs_device_t *device, uint32_t width, uint32_t height, enum gs_zstencil_format format) { UNIMPLEMENTED_RET(NULL) }
 gs_indexbuffer_t *device_indexbuffer_create(gs_device_t *device, enum gs_index_type type, void *indices, size_t num, uint32_t flags) { UNIMPLEMENTED_RET(NULL) }
 void device_stage_texture(gs_device_t *device, gs_stagesurf_t *dst, gs_texture_t *src) { UNIMPLEMENTED }
-void device_load_swapchain(gs_device_t *device, gs_swapchain_t *swap) { UNIMPLEMENTED }
 void device_present(gs_device_t *device) { UNIMPLEMENTED }
