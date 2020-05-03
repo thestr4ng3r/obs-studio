@@ -118,14 +118,51 @@ void device_load_indexbuffer(gs_device_t *device, gs_indexbuffer_t *ib)
 	device->index_buffer_cur = ib;
 }
 
+static gs_shader_t *create_shader(gs_device_t *device, const char *file)
+{
+	gs_shader_t *r = bzalloc(sizeof(gs_shader_t));
+	r->device = device;
+	r->file = bstrdup (file);
+	if (!strcmp (file, "share/obs/libobs/default.effect (Vertex shader, technique Draw, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_DRAW_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/default.effect (Pixel shader, technique Draw, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_DRAW_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/default.effect (Vertex shader, technique DrawAlphaDivide, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/default.effect (Pixel shader, technique DrawAlphaDivide, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/opaque.effect (Vertex shader, technique Draw, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_OPAQUE_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/opaque.effect (Pixel shader, technique Draw, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_OPAQUE_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique Solid, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique Solid, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique SolidColored, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_COLORED_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique SolidColored, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_COLORED_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique Random, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_RANDOM_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique Random, pass 0)"))
+		r->kind = CPU_SHADER_DEFAULT_SOLID_RANDOM_FRAGMENT;
+	else
+	{
+		blog(LOG_WARNING, "Shader unknown to CPU Subsystem: %s", file);
+		r->kind = CPU_SHADER_UNKNOWN;
+	}
+	return r;
+}
+
 gs_shader_t *device_vertexshader_create(gs_device_t *device, const char *shader, const char *file, char **error_string)
 {
-	return bzalloc(sizeof(gs_shader_t));
+	return create_shader(device, file);
 }
 
 gs_shader_t *device_pixelshader_create(gs_device_t *device, const char *shader, const char *file, char **error_string)
 {
-	return bzalloc(sizeof(gs_shader_t));
+	return create_shader(device, file);
 }
 
 void device_load_vertexshader(gs_device_t *device, gs_shader_t *vertshader)
@@ -140,24 +177,68 @@ void device_load_pixelshader(gs_device_t *device, gs_shader_t *pixelshader)
 
 void gs_shader_destroy(gs_shader_t *shader)
 {
+	if(!shader)
+		return;
+	bfree(shader->file);
 	bfree(shader);
 }
 
 gs_sparam_t *gs_shader_get_param_by_name(gs_shader_t *shader, const char *name)
 {
-	return bzalloc(sizeof(gs_sparam_t));
+	gs_sparam_t *r = bzalloc(sizeof(gs_sparam_t));
+	r->device = shader->device;
+	r->shader = shader;
+	r->name = bstrdup(name);
+	r->kind = CPU_SHADER_PARAM_UNKNOWN;
+	if(shader->kind == CPU_SHADER_DEFAULT_DRAW_FRAGMENT)
+	{
+		if(!strcmp(name, "image"))
+		{
+			r->kind = CPU_SHADER_PARAM_IMAGE;
+		}
+	}
+	if(r->kind == CPU_SHADER_PARAM_UNKNOWN)
+	{
+		blog(LOG_WARNING, "Unknown param for shader %s: %s", shader->file, name);
+	}
+	return r;
 }
 
 void gs_shader_get_param_info(const gs_sparam_t *param, struct gs_shader_param_info *info)
 {
-	// TODO
-	info->type = GS_SHADER_PARAM_UNKNOWN;
-	info->name = "unknown";
+	info->name = param->name;
+	switch(param->kind)
+	{
+	case CPU_SHADER_PARAM_IMAGE:
+		info->type = GS_SHADER_PARAM_TEXTURE;
+		break;
+	case CPU_SHADER_PARAM_UNKNOWN:
+		info->type = GS_SHADER_PARAM_UNKNOWN;
+		break;
+	}
 }
 
 void gs_shader_set_val(gs_sparam_t *param, const void *val, size_t size)
 {
-	// TODO
+	switch(param->kind) {
+	case CPU_SHADER_PARAM_IMAGE:
+		param->device->params.image = *(gs_texture_t **)val;
+		break;
+	case CPU_SHADER_PARAM_UNKNOWN:
+		break;
+	}
+}
+
+void gs_shader_set_texture(gs_sparam_t *param, gs_texture_t *val)
+{
+	switch(param->kind) {
+	case CPU_SHADER_PARAM_IMAGE:
+		param->device->params.image = val;
+		break;
+	default:
+		blog(LOG_ERROR, "Tried to set texture to an invalid param %s", param->name);
+		break;
+	}
 }
 
 gs_samplerstate_t *device_samplerstate_create(gs_device_t *device, const struct gs_sampler_info *info)
@@ -170,7 +251,7 @@ void gs_samplerstate_destroy(gs_samplerstate_t *samplerstate)
 	bfree(samplerstate);
 }
 
-static size_t tex_data_size(gs_texture_t *tex)
+size_t cpu_tex_data_size(gs_texture_t *tex)
 {
 	size_t bpp = gs_get_format_bpp(tex->color_format) / 8;
 	return bpp * tex->width * tex->height * tex->levels;
@@ -184,7 +265,7 @@ gs_texture_t *device_texture_create(gs_device_t *device, uint32_t width, uint32_
 	r->height = height;
 	r->color_format = color_format;
 	r->levels = levels;
-	size_t size = tex_data_size(r);
+	size_t size = cpu_tex_data_size(r);
 	r->data = bmalloc(size);
 	if(data && *data)
 		memcpy(r->data, *data, size);
@@ -228,6 +309,11 @@ gs_stagesurf_t *device_stagesurface_create(gs_device_t *device, uint32_t width, 
 void gs_stagesurface_destroy(gs_stagesurf_t *stagesurf)
 {
 	bfree(stagesurf);
+}
+
+bool gs_stagesurface_map(gs_stagesurf_t *stagesurf, uint8_t **data, uint32_t *linesize)
+{
+	UNIMPLEMENTED
 }
 
 void device_begin_frame(gs_device_t *device)
@@ -313,6 +399,22 @@ void device_ortho(gs_device_t *device, float left, float right, float top, float
 	dst->t.w = 1.0f;
 }
 
+void device_projection_push(gs_device_t *device)
+{
+	da_push_back(device->proj_stack, &device->cur_proj);
+}
+
+void device_projection_pop(gs_device_t *device)
+{
+	struct matrix4 *end;
+	if (!device->proj_stack.num)
+		return;
+
+	end = da_end(device->proj_stack);
+	device->cur_proj = *end;
+	da_pop_back(device->proj_stack);
+}
+
 void device_set_viewport(gs_device_t *device, int x, int y, int width, int height)
 {
 	device->viewport.x = x;
@@ -321,14 +423,63 @@ void device_set_viewport(gs_device_t *device, int x, int y, int width, int heigh
 	device->viewport.height = height;
 }
 
+void device_get_viewport(const gs_device_t *device, struct gs_rect *rect)
+{
+	rect->x = device->viewport.x;
+	rect->y = device->viewport.y;
+	rect->cx = device->viewport.width;
+	rect->cy = device->viewport.height;
+}
+
+static void cpu_draw_texture(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
+{
+	gs_shader_t *vert = device->vertex_shader_cur;
+	gs_shader_t *frag = device->fragment_shader_cur;
+	if(vert->kind != CPU_SHADER_DEFAULT_DRAW_VERTEX || frag->kind != CPU_SHADER_DEFAULT_DRAW_FRAGMENT)
+	{
+		blog(LOG_ERROR, "Vertex or Fragment Shader unimplemented: %s + %s", vert->file, frag->file);
+		return;
+	}
+
+	gs_texture_t *src = device->params.image;
+	if(!src)
+	{
+		blog(LOG_ERROR, "No texture bound");
+		return;
+	}
+
+	gs_texture_t *dst = device->render_target.tex;
+	memset(dst->data, 127, cpu_tex_data_size (dst));
+}
+
 void device_draw(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
 {
-	// TODO: Do the heavy stuff here
-	blog(LOG_ERROR, "CPU Drawing unimplemented: %p %p", device->render_target.tex, device->render_target.zstencil);
+	gs_effect_t *effect = gs_get_effect();
+	if (effect)
+		gs_effect_update_params(effect);
+
+	gs_shader_t *vert = device->vertex_shader_cur;
+	gs_shader_t *frag = device->fragment_shader_cur;
+	if(!vert || !frag)
+	{
+		blog(LOG_ERROR, "Vertex or Fragment Shader not set");
+		return;
+	}
+	if(vert->kind == CPU_SHADER_UNKNOWN || frag->kind == CPU_SHADER_UNKNOWN)
+	{
+		blog(LOG_ERROR, "Vertex or Fragment Shader unknown: %s + %s", vert->file, frag->file);
+		return;
+	}
+
 	if(!device->render_target.tex)
 	{
 		// Draw to swapchain
 		cpu_platform_draw(device);
+	}
+	else
+	{
+		// Draw to target
+		cpu_draw_texture(device, draw_mode, start_vert, num_verts);
 	}
 }
 
@@ -366,8 +517,16 @@ void device_load_swapchain(gs_device_t *device, gs_swapchain_t *swap)
 	device->swapchain_cur = swap;
 }
 
+void device_get_size(const gs_device_t *device, uint32_t *cx, uint32_t *cy)
+{
+	*cx = device->width;
+	*cy = device->height;
+}
+
 void device_resize(gs_device_t *device, uint32_t cx, uint32_t cy)
 {
+	device->width = cx;
+	device->height = cy;
 	if(!device->swapchain_cur)
 	{
 		blog(LOG_ERROR, "No current swapchain");
@@ -376,8 +535,13 @@ void device_resize(gs_device_t *device, uint32_t cx, uint32_t cy)
 	cpu_platform_resize_swapchain(device->swapchain_cur, cx, cy);
 }
 
+void device_present(gs_device_t *device)
+{
+	// TODO
+}
+
+
 void *device_get_device_obj(gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
-void device_get_size(const gs_device_t *device, uint32_t *cx, uint32_t *cy) { UNIMPLEMENTED }
 uint32_t device_get_width(const gs_device_t *device) { UNIMPLEMENTED_RET(0) }
 uint32_t device_get_height(const gs_device_t *device) { UNIMPLEMENTED_RET(0) }
 gs_timer_t *device_timer_create(gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
@@ -401,11 +565,8 @@ void device_blend_function(gs_device_t *device, enum gs_blend_type src, enum gs_
 void device_depth_function(gs_device_t *device, enum gs_depth_test test) { UNIMPLEMENTED }
 void device_stencil_function(gs_device_t *device, enum gs_stencil_side side, enum gs_depth_test test) { UNIMPLEMENTED }
 void device_stencil_op(gs_device_t *device, enum gs_stencil_side side, enum gs_stencil_op_type fail, enum gs_stencil_op_type zfail, enum gs_stencil_op_type zpass) { UNIMPLEMENTED }
-void device_get_viewport(const gs_device_t *device, struct gs_rect *rect) { UNIMPLEMENTED }
 void device_set_scissor_rect(gs_device_t *device, const struct gs_rect *rect) { UNIMPLEMENTED }
 void device_frustum(gs_device_t *device, float left, float right, float top, float bottom, float near, float far) { UNIMPLEMENTED }
-void device_projection_push(gs_device_t *device) { UNIMPLEMENTED }
-void device_projection_pop(gs_device_t *device) { UNIMPLEMENTED }
 void device_debug_marker_begin(gs_device_t *device, const char *markername, const float color[4]) { UNIMPLEMENTED }
 void device_debug_marker_end(gs_device_t *device) {	UNIMPLEMENTED }
 
@@ -416,4 +577,3 @@ gs_texture_t *device_voltexture_create(gs_device_t *device, uint32_t width, uint
 gs_zstencil_t *device_zstencil_create(gs_device_t *device, uint32_t width, uint32_t height, enum gs_zstencil_format format) { UNIMPLEMENTED_RET(NULL) }
 gs_indexbuffer_t *device_indexbuffer_create(gs_device_t *device, enum gs_index_type type, void *indices, size_t num, uint32_t flags) { UNIMPLEMENTED_RET(NULL) }
 void device_stage_texture(gs_device_t *device, gs_stagesurf_t *dst, gs_texture_t *src) { UNIMPLEMENTED }
-void device_present(gs_device_t *device) { UNIMPLEMENTED }

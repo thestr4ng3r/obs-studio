@@ -27,12 +27,38 @@ struct gs_vertex_buffer {
 	struct gs_vb_data *data;
 };
 
-struct gs_shader {
+enum cpu_shader_kind {
+	CPU_SHADER_UNKNOWN,
+	CPU_SHADER_DEFAULT_DRAW_VERTEX,
+	CPU_SHADER_DEFAULT_DRAW_FRAGMENT,
+	CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_VERTEX,
+	CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_FRAGMENT,
+	CPU_SHADER_DEFAULT_OPAQUE_VERTEX,
+	CPU_SHADER_DEFAULT_OPAQUE_FRAGMENT,
+	CPU_SHADER_DEFAULT_SOLID_VERTEX,
+	CPU_SHADER_DEFAULT_SOLID_FRAGMENT,
+	CPU_SHADER_DEFAULT_SOLID_COLORED_VERTEX,
+	CPU_SHADER_DEFAULT_SOLID_COLORED_FRAGMENT,
+	CPU_SHADER_DEFAULT_SOLID_RANDOM_VERTEX,
+	CPU_SHADER_DEFAULT_SOLID_RANDOM_FRAGMENT,
+};
 
+struct gs_shader {
+	struct gs_device *device;
+	enum cpu_shader_kind kind;
+	char *file;
+};
+
+enum cpu_shader_param_kind {
+	CPU_SHADER_PARAM_UNKNOWN,
+	CPU_SHADER_PARAM_IMAGE
 };
 
 struct gs_shader_param {
-
+	struct gs_device *device;
+	struct gs_shader *shader;
+	char *name;
+	enum cpu_shader_param_kind kind;
 };
 
 struct gs_sampler_state {
@@ -60,6 +86,8 @@ struct gs_swap_chain {
 };
 
 struct gs_device {
+	uint32_t width;
+	uint32_t height;
 	struct cpu_platform *plat;
 	struct {
 		enum gs_blend_type src_c;
@@ -72,6 +100,7 @@ struct gs_device {
 	enum gs_cull_mode cull_mode;
 	struct matrix4 cur_vp;
 	struct matrix4 cur_proj;
+	DARRAY(struct matrix4) proj_stack;
 	struct {
 		gs_texture_t *tex;
 		gs_zstencil_t *zstencil;
@@ -87,6 +116,9 @@ struct gs_device {
 	gs_vertbuffer_t *vertex_buffer_cur;
 	gs_indexbuffer_t *index_buffer_cur;
 	gs_swapchain_t *swapchain_cur;
+	struct {
+		gs_texture_t *image;
+	} params;
 };
 
 bool cpu_platform_init_swapchain(struct gs_swap_chain *swap);
@@ -95,3 +127,4 @@ void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, u
 struct cpu_platform *cpu_platform_create(gs_device_t *device, uint32_t adapter);
 void cpu_platform_destroy(struct cpu_platform *plat);
 void cpu_platform_draw(struct gs_device *device);
+size_t cpu_tex_data_size(gs_texture_t *tex);

@@ -19,6 +19,7 @@
 #include <X11/Xlib-xcb.h>
 
 #include <xcb/xcb.h>
+#include <xcb/xcb_image.h>
 
 #include <stdio.h>
 
@@ -156,10 +157,13 @@ bool cpu_platform_init_swapchain(struct gs_swap_chain *swap)
 	if (!geometry)
 		goto beach;
 
+	swap->device->width = geometry->width;
+	swap->device->height = geometry->height;
+
 	xcb_screen_t *screen = get_screen_from_root(xcb_conn, geometry->root);
 	bool status = false;
 
-	int visual;
+	int visual = 0;
 
 	xcb_gcontext_t foreground = xcb_generate_id (xcb_conn);
 	uint32_t mask = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
@@ -210,40 +214,24 @@ void cpu_platform_draw(struct gs_device *device)
 	}
 
 	Display *display = swap->device->plat->display;
-	xcb_connection_t *xcb_conn = XGetXCBConnection(display);
+	xcb_connection_t *conn = XGetXCBConnection(display);
 	xcb_window_t window = swap->wi->window;
 	xcb_gcontext_t foreground = swap->wi->foreground;
 
-	/* geometric objects */
-	xcb_point_t          points[] = {
-			{10, 10},
-			{10, 20},
-			{20, 10},
-			{20, 20}};
+	gs_texture_t *tex = device->params.image;
+	if(!tex)
+	{
+		blog(LOG_ERROR, "No texture bound");
+		return;
+	}
+	xcb_void_cookie_t cookie = xcb_put_image_checked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, window, foreground, tex->width, tex->height, 0, 0, 0, 24, cpu_tex_data_size(tex), tex->data);
+	xcb_generic_error_t *error;
+	if ((error = xcb_request_check(conn, cookie)))
+	{
+		fprintf(stderr, "Could not blit!!!!!\n");
+		free(error);
+		return;
+	}
 
-	xcb_point_t          polyline[] = {
-			{50, 10},
-			{ 5, 20},     /* rest of points are relative */
-			{25,-20},
-			{10, 10}};
-
-	xcb_segment_t        segments[] = {
-			{100, 10, 140, 30},
-			{110, 25, 130, 60}};
-
-	xcb_rectangle_t      rectangles[] = {
-			{ 10, 50, 40, 20},
-			{ 80, 50, 10, 40}};
-
-	xcb_arc_t            arcs[] = {
-			{10, 100, 60, 40, 0, 90 << 6},
-			{90, 100, 55, 40, 0, 270 << 6}};
-
-	xcb_poly_point (xcb_conn, XCB_COORD_MODE_ORIGIN, window, foreground, 4, points);
-	xcb_poly_line (xcb_conn, XCB_COORD_MODE_PREVIOUS, window, foreground, 4, polyline);
-	xcb_poly_segment (xcb_conn, window, foreground, 2, segments);
-	xcb_poly_rectangle (xcb_conn, window, foreground, 2, rectangles);
-	xcb_poly_arc (xcb_conn, window, foreground, 2, arcs);
-
-	xcb_flush (xcb_conn);
+	xcb_flush (conn);
 }
