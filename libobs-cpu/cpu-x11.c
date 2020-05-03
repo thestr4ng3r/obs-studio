@@ -204,7 +204,9 @@ void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, u
 	xcb_configure_window (xcb_conn, window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
 }
 
-void cpu_platform_draw(struct gs_device *device)
+void cpu_platform_blit(struct gs_device *device, gs_texture_t *src,
+		size_t src_x, size_t src_y, size_t src_width, size_t src_height,
+		size_t dst_x, size_t dst_y, size_t dst_width, size_t dst_height)
 {
 	struct gs_swap_chain *swap = device->swapchain_cur;
 	if(!swap)
@@ -218,13 +220,7 @@ void cpu_platform_draw(struct gs_device *device)
 	xcb_window_t window = swap->wi->window;
 	xcb_gcontext_t foreground = swap->wi->foreground;
 
-	gs_texture_t *tex = device->params.image;
-	if(!tex)
-	{
-		blog(LOG_ERROR, "No texture bound");
-		return;
-	}
-	xcb_void_cookie_t cookie = xcb_put_image_checked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, window, foreground, tex->width, tex->height, 0, 0, 0, 24, cpu_tex_data_size(tex), tex->data);
+	xcb_void_cookie_t cookie = xcb_put_image_checked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, window, foreground, src->width, src->height, 0, 0, 0, 24, cpu_tex_data_size(src), src->data);
 	xcb_generic_error_t *error;
 	if ((error = xcb_request_check(conn, cookie)))
 	{
