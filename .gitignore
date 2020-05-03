@@ -97,3 +97,8 @@ tags
 .DS_Store
 */.DS_Store
 */**/.DS_Store
+
+
+cmake-build-*
+.idea
+install
