@@ -307,6 +307,10 @@ bool gs_texture_map(gs_texture_t *tex, uint8_t **ptr, uint32_t *linesize)
 	*linesize = tex->width * gs_get_format_bpp(tex->color_format) / 8;
 }
 
+void gs_texture_unmap(gs_texture_t *tex)
+{
+}
+
 enum gs_color_format gs_texture_get_color_format(const gs_texture_t *tex)
 {
 	return tex->color_format;
@@ -314,17 +318,59 @@ enum gs_color_format gs_texture_get_color_format(const gs_texture_t *tex)
 
 gs_stagesurf_t *device_stagesurface_create(gs_device_t *device, uint32_t width, uint32_t height, enum gs_color_format color_format)
 {
-	return bzalloc(sizeof(gs_stagesurf_t));
+	gs_stagesurf_t *r = bzalloc(sizeof(gs_stagesurf_t));
+	r->tex = device_texture_create(device, width, height, color_format, 1, NULL, 0);
+	return r;
 }
 
 void gs_stagesurface_destroy(gs_stagesurf_t *stagesurf)
 {
+	if(!stagesurf)
+		return;
+	gs_texture_destroy(stagesurf->tex);
 	bfree(stagesurf);
+}
+
+void device_stage_texture(gs_device_t *device, gs_stagesurf_t *dst, gs_texture_t *src)
+{
+	struct cpu_blit_params params = {
+		.src = src,
+		.dst = dst->tex,
+		.src_x = 0,
+		.src_y = 0,
+		.src_width = src->width,
+		.src_height = src->height,
+		.dst_x = 0,
+		.dst_y = 0,
+		.dst_width = dst->tex->width,
+		.dst_height = dst->tex->height
+	};
+	cpu_blit_texture(params);
+}
+
+uint32_t gs_stagesurface_get_width(const gs_stagesurf_t *stagesurf)
+{
+	return stagesurf->tex->width;
+}
+
+uint32_t gs_stagesurface_get_height(const gs_stagesurf_t *stagesurf)
+{
+	return stagesurf->tex->height;
+}
+
+enum gs_color_format gs_stagesurface_get_color_format(const gs_stagesurf_t *stagesurf)
+{
+	return stagesurf->tex->color_format;
 }
 
 bool gs_stagesurface_map(gs_stagesurf_t *stagesurf, uint8_t **data, uint32_t *linesize)
 {
-	UNIMPLEMENTED
+	gs_texture_map(stagesurf->tex, data, linesize);
+}
+
+void gs_stagesurface_unmap(gs_stagesurf_t *stagesurf)
+{
+	gs_texture_unmap(stagesurf->tex);
 }
 
 void device_begin_frame(gs_device_t *device)
@@ -647,4 +693,3 @@ gs_texture_t *device_voltexture_create(gs_device_t *device, uint32_t width, uint
 		enum gs_color_format color_format, uint32_t levels, const uint8_t *const *data, uint32_t flags) { UNIMPLEMENTED_RET(NULL) }
 gs_zstencil_t *device_zstencil_create(gs_device_t *device, uint32_t width, uint32_t height, enum gs_zstencil_format format) { UNIMPLEMENTED_RET(NULL) }
 gs_indexbuffer_t *device_indexbuffer_create(gs_device_t *device, enum gs_index_type type, void *indices, size_t num, uint32_t flags) { UNIMPLEMENTED_RET(NULL) }
-void device_stage_texture(gs_device_t *device, gs_stagesurf_t *dst, gs_texture_t *src) { UNIMPLEMENTED }

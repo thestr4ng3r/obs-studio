@@ -409,7 +409,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 				      &child);
 		xcursor_offset(p->cursor, x, y);
 	}
-
+/*
 	const int config_attrs[] = {GLX_BIND_TO_TEXTURE_RGBA_EXT,
 				    GL_TRUE,
 				    GLX_DRAWABLE_TYPE,
@@ -560,7 +560,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		     XCompcap::getWindowName(p->win).c_str(),
 		     XCompcap::getWindowClass(p->win).c_str(), attr.depth,
 		     nelem, found ? "yes" : "no");
-	}
+	}*/
 }
 
 void XCompcapMain::tick(float seconds)

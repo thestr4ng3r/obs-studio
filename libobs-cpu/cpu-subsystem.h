@@ -80,7 +80,7 @@ struct gs_texture {
 };
 
 struct gs_stage_surface {
-
+	gs_texture_t *tex;
 };
 
 struct gs_swap_chain {
