@@ -124,18 +124,33 @@ struct gs_device {
 	} params;
 };
 
+struct cpu_blit_params {
+	gs_texture_t *src;
+	gs_texture_t *dst;
+	int64_t src_x, src_y, src_width, src_height;
+	int64_t dst_x, dst_y, dst_width, dst_height;
+};
+
+#define CPU_BLIT_PARAMS_UNPACK \
+	gs_texture_t *src = params.src; \
+	gs_texture_t *dst = params.dst; \
+	int64_t src_x = params.src_x; \
+	int64_t src_y = params.src_y; \
+	int64_t src_width = params.src_width; \
+	int64_t src_height = params.src_height; \
+	int64_t dst_x = params.dst_x; \
+	int64_t dst_y = params.dst_y; \
+	int64_t dst_width = params.dst_width; \
+	int64_t dst_height = params.dst_height;
+
 size_t cpu_tex_data_size(gs_texture_t *tex);
-void cpu_blit_texture(gs_texture_t *src, gs_texture_t *dst,
-					  int64_t src_x, int64_t src_y, int64_t src_width, int64_t src_height,
-					  int64_t dst_x, int64_t dst_y, int64_t dst_width, int64_t dst_height);
+void cpu_blit_texture(struct cpu_blit_params params);
 bool cpu_platform_init_swapchain(struct gs_swap_chain *swap);
 void cpu_platform_fini_swapchain(struct gs_swap_chain *swap);
 void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, uint32_t height);
 struct cpu_platform *cpu_platform_create(gs_device_t *device, uint32_t adapter);
 void cpu_platform_destroy(struct cpu_platform *plat);
-void cpu_platform_blit(struct gs_device *device, gs_texture_t *src,
-					   size_t src_x, size_t src_y, size_t src_width, size_t src_height,
-					   size_t dst_x, size_t dst_y, size_t dst_width, size_t dst_height);
+void cpu_platform_blit(struct gs_device *device, struct cpu_blit_params params);
 
 #ifdef __cplusplus
 }

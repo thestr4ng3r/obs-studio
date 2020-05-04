@@ -1,27 +1,10 @@
 
 #include "cpu-subsystem.h"
 
-struct BlitParams
-{
-	gs_texture_t *src;
-	gs_texture_t *dst;
-	int64_t src_x, src_y, src_width, src_height;
-	int64_t dst_x, dst_y, dst_width, dst_height;
-};
-
 template<size_t src_bpp, size_t dst_bpp, typename CopyOp>
-static void blit_with_op(const CopyOp &op, BlitParams params)
+static void blit_with_op(const CopyOp &op, cpu_blit_params params)
 {
-	gs_texture_t *src = params.src;
-	gs_texture_t *dst = params.dst;
-	int64_t src_x = params.src_x;
-	int64_t src_y = params.src_y;
-	int64_t src_width = params.src_width;
-	int64_t src_height = params.src_height;
-	int64_t dst_x = params.dst_x;
-	int64_t dst_y = params.dst_y;
-	int64_t dst_width = params.dst_width;
-	int64_t dst_height = params.dst_height;
+	CPU_BLIT_PARAMS_UNPACK
 
 	float scale_x = (float)src_width / (float)dst_width;
 	float scale_y = (float)src_height / (float)dst_height;
@@ -55,10 +38,10 @@ static void blit_with_op(const CopyOp &op, BlitParams params)
 	}
 }
 
-extern "C" void cpu_blit_texture(gs_texture_t *src, gs_texture_t *dst,
-					  int64_t src_x, int64_t src_y, int64_t src_width, int64_t src_height,
-					  int64_t dst_x, int64_t dst_y, int64_t dst_width, int64_t dst_height)
+extern "C" void cpu_blit_texture(struct cpu_blit_params params)
 {
+	CPU_BLIT_PARAMS_UNPACK
+
 	if(src_x == 0 && src_y == 0 && src_width == src->width && src_height == src->height
 	   && dst_x == 0 && dst_y == 0 && dst_width == dst->width && dst_height == dst->height
 	   && src->width == dst->width && src->height == dst->height)
@@ -67,8 +50,6 @@ extern "C" void cpu_blit_texture(gs_texture_t *src, gs_texture_t *dst,
 		memcpy(dst->data, src->data, cpu_tex_data_size (dst));
 		return;
 	}
-
-	BlitParams params = { src, dst, src_x, src_y, src_width, src_height, dst_x, dst_y, dst_width, dst_height };
 
 	switch(src->color_format)
 	{

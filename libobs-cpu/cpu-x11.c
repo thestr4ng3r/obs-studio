@@ -204,10 +204,10 @@ void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, u
 	xcb_configure_window (xcb_conn, window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
 }
 
-void cpu_platform_blit(struct gs_device *device, gs_texture_t *src,
-		size_t src_x, size_t src_y, size_t src_width, size_t src_height,
-		size_t dst_x, size_t dst_y, size_t dst_width, size_t dst_height)
+void cpu_platform_blit(struct gs_device *device, struct cpu_blit_params params)
 {
+	CPU_BLIT_PARAMS_UNPACK
+
 	struct gs_swap_chain *swap = device->swapchain_cur;
 	if(!swap)
 	{
@@ -215,12 +215,32 @@ void cpu_platform_blit(struct gs_device *device, gs_texture_t *src,
 		return;
 	}
 
+	if(src->color_format != GS_RGBA)
+	{
+		blog(LOG_ERROR, "Invalid format for blitting on screen");
+		return;
+	}
+
+	if(dst_width <= 0 || dst_height <= 0)
+		return;
+
+	params.dst = device_texture_create(device, dst_width, dst_height, src->color_format, 1, NULL, 0);
+	if(!params.dst)
+		return;
+	params.dst_x = 0;
+	params.dst_y = 0;
+	cpu_blit_texture(params);
+
 	Display *display = swap->device->plat->display;
 	xcb_connection_t *conn = XGetXCBConnection(display);
 	xcb_window_t window = swap->wi->window;
 	xcb_gcontext_t foreground = swap->wi->foreground;
 
-	xcb_void_cookie_t cookie = xcb_put_image_checked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, window, foreground, src->width, src->height, 0, 0, 0, 24, cpu_tex_data_size(src), src->data);
+	xcb_void_cookie_t cookie = xcb_put_image_checked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, window, foreground,
+			params.dst->width, params.dst->height, dst_x, dst_y, 0, 24, cpu_tex_data_size(params.dst), params.dst->data);
+
+	gs_texture_destroy(params.dst);
+
 	xcb_generic_error_t *error;
 	if ((error = xcb_request_check(conn, cookie)))
 	{

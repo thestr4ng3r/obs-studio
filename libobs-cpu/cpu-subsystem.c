@@ -464,6 +464,7 @@ static void cpu_vertex_to_screen(gs_device_t *device, int64_t *x_out, int64_t *y
 	vec4_transform(&v, &v, &mvp);
 	vec4_divf(&v, &v, v.w);
 	vec4_addf(&v, &v, 1.0f);
+	vec4_mulf(&v, &v, 0.5f);
 
 	*x_out = (int64_t)(v.x * (float)device->viewport.width) + (int64_t)device->viewport.x;
 	*y_out = (int64_t)((1.0f - v.y) * (float)device->viewport.height) + (int64_t)device->viewport.y;
@@ -492,32 +493,34 @@ static void cpu_draw_blit(gs_device_t *device, enum gs_draw_mode draw_mode, uint
 	gs_matrix_get(&mvp);
 	matrix4_mul(&mvp, &mvp, &device->cur_proj);
 
-	int64_t dst_x, dst_y;
-	cpu_vertex_to_screen(device, &dst_x, &dst_y, &vbo->data->points[0]);
+	struct cpu_blit_params params = { 0 };
+	params.src = src;
+	params.dst = dst;
+
+	cpu_vertex_to_screen(device, &params.dst_x, &params.dst_y, &vbo->data->points[0]);
 	int64_t dst_x1, dst_y1;
 	cpu_vertex_to_screen(device, &dst_x1, &dst_y1, &vbo->data->points[3]);
-	uint32_t dst_width = dst_x1 - dst_x;
-	uint32_t dst_height = dst_y1 - dst_y;
-
-	// TODO: CHECK THE BOUNDS!!!!!!!!!!!!!!!!!
+	params.dst_width = dst_x1 - params.dst_x;
+	params.dst_height = dst_y1 - params.dst_y;
 
 	struct vec2 *uvs = vbo->data->tvarray[0].array;
 	struct vec2 uv_min = uvs[0];
 	struct vec2 uv_max = uvs[3];
 
+	params.src_x = uv_min.x;
+	params.src_y = uv_min.y;
+	params.src_width = uv_max.x - uv_min.x;
+	params.src_height = uv_max.y - uv_min.y;
+
 	if(dst)
 	{
 		// texture -> texture
-		cpu_blit_texture(src, dst,
-				uv_min.x, uv_min.y, uv_max.x - uv_min.x, uv_max.y - uv_min.y,
-				dst_x, dst_y, dst_width, dst_height);
+		cpu_blit_texture(params);
 	}
 	else
 	{
 		// texture -> swapchain
-		cpu_platform_blit(device, src,
-				(size_t)uv_min.x, (size_t)uv_min.y, (size_t)(uv_max.x - uv_min.x), (size_t)(uv_max.y - uv_min.y),
-				dst_x, dst_y, dst_width, dst_height);
+		cpu_platform_blit(device, params);
 	}
 
 }
