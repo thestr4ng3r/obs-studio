@@ -132,21 +132,29 @@ static gs_shader_t *create_shader(gs_device_t *device, const char *file)
 	else if (!strcmp (file, "share/obs/libobs/default.effect (Pixel shader, technique DrawAlphaDivide, pass 0)"))
 		r->kind = CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_FRAGMENT;
 	else if (!strcmp (file, "share/obs/libobs/opaque.effect (Vertex shader, technique Draw, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_OPAQUE_VERTEX;
+		r->kind = CPU_SHADER_OPAQUE_VERTEX;
 	else if (!strcmp (file, "share/obs/libobs/opaque.effect (Pixel shader, technique Draw, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_OPAQUE_FRAGMENT;
+		r->kind = CPU_SHADER_OPAQUE_FRAGMENT;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique Solid, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_VERTEX;
+		r->kind = CPU_SHADER_SOLID_VERTEX;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique Solid, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_FRAGMENT;
+		r->kind = CPU_SHADER_SOLID_FRAGMENT;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique SolidColored, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_COLORED_VERTEX;
+		r->kind = CPU_SHADER_SOLID_COLORED_VERTEX;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique SolidColored, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_COLORED_FRAGMENT;
+		r->kind = CPU_SHADER_SOLID_COLORED_FRAGMENT;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Vertex shader, technique Random, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_RANDOM_VERTEX;
+		r->kind = CPU_SHADER_SOLID_RANDOM_VERTEX;
 	else if (!strcmp (file, "share/obs/libobs/solid.effect (Pixel shader, technique Random, pass 0)"))
-		r->kind = CPU_SHADER_DEFAULT_SOLID_RANDOM_FRAGMENT;
+		r->kind = CPU_SHADER_SOLID_RANDOM_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/format_conversion.effect (Vertex shader, technique NV12_Y, pass 0)"))
+		r->kind = CPU_SHADER_FORMAT_CONVERSION_NV12_Y_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/format_conversion.effect (Pixel shader, technique NV12_Y, pass 0)"))
+		r->kind = CPU_SHADER_FORMAT_CONVERSION_NV12_Y_FRAGMENT;
+	else if (!strcmp (file, "share/obs/libobs/format_conversion.effect (Vertex shader, technique NV12_UV, pass 0)"))
+		r->kind = CPU_SHADER_FORMAT_CONVERSION_NV12_UV_VERTEX;
+	else if (!strcmp (file, "share/obs/libobs/format_conversion.effect (Pixel shader, technique NV12_UV, pass 0)"))
+		r->kind = CPU_SHADER_FORMAT_CONVERSION_NV12_UV_FRAGMENT;
 	else
 	{
 		blog(LOG_WARNING, "Shader unknown to CPU Subsystem: %s", file);
@@ -193,10 +201,21 @@ gs_sparam_t *gs_shader_get_param_by_name(gs_shader_t *shader, const char *name)
 	if(shader->kind == CPU_SHADER_DEFAULT_DRAW_FRAGMENT)
 	{
 		if(!strcmp(name, "image"))
-		{
 			r->kind = CPU_SHADER_PARAM_IMAGE;
-		}
 	}
+	else if(shader->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_Y_FRAGMENT
+			|| shader->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_UV_FRAGMENT)
+	{
+		if(!strcmp(name, "image"))
+			r->kind = CPU_SHADER_PARAM_IMAGE;
+		else if(!strcmp(name, "color_vec0"))
+			r->kind = CPU_SHADER_PARAM_COLOR_VEC0;
+		else if(!strcmp(name, "color_vec1"))
+			r->kind = CPU_SHADER_PARAM_COLOR_VEC1;
+		else if(!strcmp(name, "color_vec2"))
+			r->kind = CPU_SHADER_PARAM_COLOR_VEC2;
+	}
+
 	if(r->kind == CPU_SHADER_PARAM_UNKNOWN)
 	{
 		blog(LOG_WARNING, "Unknown param for shader %s: %s", shader->file, name);
@@ -212,6 +231,11 @@ void gs_shader_get_param_info(const gs_sparam_t *param, struct gs_shader_param_i
 	case CPU_SHADER_PARAM_IMAGE:
 		info->type = GS_SHADER_PARAM_TEXTURE;
 		break;
+	case CPU_SHADER_PARAM_COLOR_VEC0:
+	case CPU_SHADER_PARAM_COLOR_VEC1:
+	case CPU_SHADER_PARAM_COLOR_VEC2:
+		info->type = GS_SHADER_PARAM_VEC4;
+		break;
 	case CPU_SHADER_PARAM_UNKNOWN:
 		info->type = GS_SHADER_PARAM_UNKNOWN;
 		break;
@@ -223,6 +247,15 @@ void gs_shader_set_val(gs_sparam_t *param, const void *val, size_t size)
 	switch(param->kind) {
 	case CPU_SHADER_PARAM_IMAGE:
 		param->device->params.image = *(gs_texture_t **)val;
+		break;
+	case CPU_SHADER_PARAM_COLOR_VEC0:
+		param->device->params.color_vec0 = *(struct vec4 *)val;
+		break;
+	case CPU_SHADER_PARAM_COLOR_VEC1:
+		param->device->params.color_vec1 = *(struct vec4 *)val;
+		break;
+	case CPU_SHADER_PARAM_COLOR_VEC2:
+		param->device->params.color_vec2 = *(struct vec4 *)val;
 		break;
 	case CPU_SHADER_PARAM_UNKNOWN:
 		break;
@@ -572,6 +605,32 @@ static void cpu_draw_blit(gs_device_t *device, enum gs_draw_mode draw_mode, uint
 
 }
 
+static void cpu_draw_format_conversion(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
+{
+	gs_texture_t *src = device->params.image;
+	if(!src)
+	{
+		blog(LOG_ERROR, "No texture bound");
+		return;
+	}
+
+	gs_texture_t *dst = device->render_target.tex;
+	if(!dst)
+	{
+		blog(LOG_ERROR, "No render target bound for format conversion");
+		return;
+	}
+
+	if(device->vertex_shader_cur->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_Y_VERTEX)
+	{
+		cpu_rgba_to_nv12_y(src, dst, device->params.color_vec0);
+	}
+	else if(device->vertex_shader_cur->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_UV_VERTEX)
+	{
+		blog(LOG_ERROR, "TODO: Convert UV: %u %u -> %u %u", src->width, src->height, dst->width, dst->height);
+	}
+}
+
 void device_draw(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
 {
 	gs_effect_t *effect = gs_get_effect();
@@ -587,20 +646,14 @@ void device_draw(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t star
 	}
 
 	if(vert->kind == CPU_SHADER_DEFAULT_DRAW_VERTEX && frag->kind == CPU_SHADER_DEFAULT_DRAW_FRAGMENT)
-	{
 		cpu_draw_blit(device, draw_mode, start_vert, num_verts);
-		return;
-	}
+	else if((vert->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_Y_VERTEX && frag->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_Y_FRAGMENT)
+		|| (vert->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_UV_VERTEX && frag->kind == CPU_SHADER_FORMAT_CONVERSION_NV12_UV_FRAGMENT))
+		cpu_draw_format_conversion(device, draw_mode, start_vert, num_verts);
 	else if(vert->kind == CPU_SHADER_UNKNOWN || frag->kind == CPU_SHADER_UNKNOWN)
-	{
 		blog(LOG_ERROR, "Vertex or Fragment Shader unknown: %s + %s", vert->file, frag->file);
-		return;
-	}
 	else
-	{
 		blog(LOG_ERROR, "Vertex or Fragment Shader unimplemented: %s + %s", vert->file, frag->file);
-		return;
-	}
 }
 
 gs_swapchain_t *device_swapchain_create(gs_device_t *device, const struct gs_init_data *info)

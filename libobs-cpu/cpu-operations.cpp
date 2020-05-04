@@ -80,3 +80,54 @@ extern "C" void cpu_blit_texture(struct cpu_blit_params params)
 
 	blog(LOG_ERROR, "Can't blit between these formats");
 }
+
+template<size_t src_bpp, size_t dst_bpp, size_t res_div, typename CopyOp>
+static void format_convert_with_op(const CopyOp &op, gs_texture_t *src, gs_texture_t *dst)
+{
+	size_t x, y;
+	for(y = 0; y < dst->height; y++)
+	{
+		size_t sy = y * res_div;
+		for(x = 0; x < dst->width; x++)
+		{
+			size_t sx = x * res_div;
+			op(dst->data + (y * dst->width + x) * dst_bpp,
+				src->data + (sy * src->width + sx) * src_bpp);
+		}
+	}
+}
+
+extern "C" void cpu_rgba_to_nv12_y(gs_texture_t *src, gs_texture_t *dst, struct vec4 color_vec0)
+{
+	if(dst->width != src->width || dst->height != src->height)
+	{
+		blog(LOG_ERROR, "Resolution mismatch in NV12 Y conversion");
+		return;
+	}
+	if(dst->color_format != GS_R8)
+	{
+		blog(LOG_ERROR, "Invalid dst format for NV12 Y conversion");
+		return;
+	}
+
+	if(src->color_format == GS_RGBA)
+	{
+		vec3 dv;
+		dv.x = color_vec0.x;
+		dv.y = color_vec0.y;
+		dv.z = color_vec0.z;
+		float w = color_vec0.w;
+		format_convert_with_op<4, 1, 1>([dv, w](uint8_t *d, uint8_t *s){
+			vec3 rgb;
+			rgb.x = (float)s[0] / 255.0f;
+			rgb.y = (float)s[1] / 255.0f;
+			rgb.z = (float)s[2] / 255.0f;
+			d[0] = (uint8_t)((vec3_dot(&rgb, &dv) + w) * 255.0f);
+		}, src, dst);
+	}
+	else
+	{
+		blog(LOG_ERROR, "Unsupported dst format for NV12 Y conversion");
+		return;
+	}
+}

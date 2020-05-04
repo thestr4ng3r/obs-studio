@@ -37,14 +37,18 @@ enum cpu_shader_kind {
 	CPU_SHADER_DEFAULT_DRAW_FRAGMENT,
 	CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_VERTEX,
 	CPU_SHADER_DEFAULT_DRAW_ALPHA_DIVIDE_FRAGMENT,
-	CPU_SHADER_DEFAULT_OPAQUE_VERTEX,
-	CPU_SHADER_DEFAULT_OPAQUE_FRAGMENT,
-	CPU_SHADER_DEFAULT_SOLID_VERTEX,
-	CPU_SHADER_DEFAULT_SOLID_FRAGMENT,
-	CPU_SHADER_DEFAULT_SOLID_COLORED_VERTEX,
-	CPU_SHADER_DEFAULT_SOLID_COLORED_FRAGMENT,
-	CPU_SHADER_DEFAULT_SOLID_RANDOM_VERTEX,
-	CPU_SHADER_DEFAULT_SOLID_RANDOM_FRAGMENT,
+	CPU_SHADER_OPAQUE_VERTEX,
+	CPU_SHADER_OPAQUE_FRAGMENT,
+	CPU_SHADER_SOLID_VERTEX,
+	CPU_SHADER_SOLID_FRAGMENT,
+	CPU_SHADER_SOLID_COLORED_VERTEX,
+	CPU_SHADER_SOLID_COLORED_FRAGMENT,
+	CPU_SHADER_SOLID_RANDOM_VERTEX,
+	CPU_SHADER_SOLID_RANDOM_FRAGMENT,
+	CPU_SHADER_FORMAT_CONVERSION_NV12_Y_VERTEX,
+	CPU_SHADER_FORMAT_CONVERSION_NV12_Y_FRAGMENT,
+	CPU_SHADER_FORMAT_CONVERSION_NV12_UV_VERTEX,
+	CPU_SHADER_FORMAT_CONVERSION_NV12_UV_FRAGMENT,
 };
 
 struct gs_shader {
@@ -55,7 +59,10 @@ struct gs_shader {
 
 enum cpu_shader_param_kind {
 	CPU_SHADER_PARAM_UNKNOWN,
-	CPU_SHADER_PARAM_IMAGE
+	CPU_SHADER_PARAM_IMAGE,
+	CPU_SHADER_PARAM_COLOR_VEC0,
+	CPU_SHADER_PARAM_COLOR_VEC1,
+	CPU_SHADER_PARAM_COLOR_VEC2
 };
 
 struct gs_shader_param {
@@ -121,6 +128,11 @@ struct gs_device {
 	gs_swapchain_t *swapchain_cur;
 	struct {
 		gs_texture_t *image;
+
+		// format conversion
+		struct vec4 color_vec0;
+		struct vec4 color_vec1;
+		struct vec4 color_vec2;
 	} params;
 };
 
@@ -151,6 +163,7 @@ void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, u
 struct cpu_platform *cpu_platform_create(gs_device_t *device, uint32_t adapter);
 void cpu_platform_destroy(struct cpu_platform *plat);
 void cpu_platform_blit(struct gs_device *device, struct cpu_blit_params params);
+void cpu_rgba_to_nv12_y(gs_texture_t *src, gs_texture_t *dst, struct vec4 color_vec0);
 
 #ifdef __cplusplus
 }
