@@ -301,6 +301,17 @@ uint32_t gs_texture_get_height(const gs_texture_t *tex)
 	return tex->height;
 }
 
+bool gs_texture_map(gs_texture_t *tex, uint8_t **ptr, uint32_t *linesize)
+{
+	*ptr = tex->data;
+	*linesize = tex->width * gs_get_format_bpp(tex->color_format) / 8;
+}
+
+enum gs_color_format gs_texture_get_color_format(const gs_texture_t *tex)
+{
+	return tex->color_format;
+}
+
 gs_stagesurf_t *device_stagesurface_create(gs_device_t *device, uint32_t width, uint32_t height, enum gs_color_format color_format)
 {
 	return bzalloc(sizeof(gs_stagesurf_t));
@@ -359,6 +370,16 @@ void device_set_render_target(gs_device_t *device, gs_texture_t *tex, gs_zstenci
 {
 	device->render_target.tex = tex;
 	device->render_target.zstencil = zstencil;
+}
+
+gs_texture_t *device_get_render_target(const gs_device_t *device)
+{
+	return device->render_target.tex;
+}
+
+gs_zstencil_t *device_get_zstencil_target(const gs_device_t *device)
+{
+	return device->render_target.zstencil;
 }
 
 void device_clear(gs_device_t *device, uint32_t clear_flags, const struct vec4 *color, float depth, uint8_t stencil)
@@ -431,47 +452,6 @@ void device_get_viewport(const gs_device_t *device, struct gs_rect *rect)
 	rect->cy = device->viewport.height;
 }
 
-static void blit_texture(gs_texture_t *src, gs_texture_t *dst,
-		size_t src_x, size_t src_y, size_t src_width, size_t src_height,
-		size_t dst_x, size_t dst_y, size_t dst_width, size_t dst_height)
-{
-	if(src->color_format != dst->color_format)
-	{
-		blog(LOG_ERROR, "Can't blit between different formats");
-		return;
-	}
-
-	if(src_x == 0 && src_y == 0 && src_width == src->width && src_height == src->height
-		&& dst_x == 0 && dst_y == 0 && dst_width == dst->width && dst_height == dst->height
-		&& src->width == dst->width && src->height == dst->height)
-	{
-		// direct copy
-		memcpy(dst->data, src->data, cpu_tex_data_size (dst));
-		return;
-	}
-
-	size_t bpp = gs_get_format_bpp (src->color_format) / 8;
-	float scale_x = (float)src_width / (float)dst_width;
-	float scale_y = (float)src_height / (float)dst_height;
-	size_t x, y;
-	for(y = 0; y < dst_height; y++)
-	{
-		size_t sy = (size_t)(y * scale_y) + src_y;
-		if (sy >= src->height)
-			sy = src->height - 1;
-		for(x = 0; x < dst_width; x++)
-		{
-			size_t sx = (size_t)(x * scale_x) + src_x;
-			if (sx >= src->width)
-				sx = src->width - 1;
-			// TODO: could optimize this for specific sizes
-			// TODO: blending
-			// TODO: interpolation
-			memcpy(dst->data + (y * dst->width + x) * bpp,
-					src->data + (sy * src->width + sx) * bpp, bpp);
-		}
-	}
-}
 
 static void cpu_vertex_to_screen(gs_device_t *device, int64_t *x_out, int64_t *y_out, struct vec3 *v_in)
 {
@@ -486,7 +466,7 @@ static void cpu_vertex_to_screen(gs_device_t *device, int64_t *x_out, int64_t *y
 	vec4_addf(&v, &v, 1.0f);
 
 	*x_out = (int64_t)(v.x * (float)device->viewport.width) + (int64_t)device->viewport.x;
-	*y_out = (int64_t)(v.y * (float)device->viewport.height) + (int64_t)device->viewport.y;
+	*y_out = (int64_t)((1.0f - v.y) * (float)device->viewport.height) + (int64_t)device->viewport.y;
 }
 
 static void cpu_draw_blit(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts)
@@ -517,13 +497,7 @@ static void cpu_draw_blit(gs_device_t *device, enum gs_draw_mode draw_mode, uint
 	int64_t dst_x1, dst_y1;
 	cpu_vertex_to_screen(device, &dst_x1, &dst_y1, &vbo->data->points[3]);
 	uint32_t dst_width = dst_x1 - dst_x;
-	uint32_t dst_height = dst_y - dst_y1;
-
-	if(dst_x1 <= dst_x || dst_y1 > dst_y)
-	{
-		blog(LOG_ERROR, "wtf");
-		return;
-	}
+	uint32_t dst_height = dst_y1 - dst_y;
 
 	// TODO: CHECK THE BOUNDS!!!!!!!!!!!!!!!!!
 
@@ -534,8 +508,8 @@ static void cpu_draw_blit(gs_device_t *device, enum gs_draw_mode draw_mode, uint
 	if(dst)
 	{
 		// texture -> texture
-		blit_texture(src, dst,
-				(size_t)uv_min.x, (size_t)uv_min.y, (size_t)(uv_max.x - uv_min.x), (size_t)(uv_max.y - uv_min.y),
+		cpu_blit_texture(src, dst,
+				uv_min.x, uv_min.y, uv_max.x - uv_min.x, uv_max.y - uv_min.y,
 				dst_x, dst_y, dst_width, dst_height);
 	}
 	else
@@ -647,8 +621,6 @@ void device_load_samplerstate(gs_device_t *device, gs_samplerstate_t *ss, int un
 void device_load_default_samplerstate(gs_device_t *device, bool b_3d, int unit) { UNIMPLEMENTED }
 gs_shader_t *device_get_vertex_shader(const gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
 gs_shader_t *device_get_pixel_shader(const gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
-gs_texture_t *device_get_render_target(const gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
-gs_zstencil_t *device_get_zstencil_target(const gs_device_t *device) { UNIMPLEMENTED_RET(NULL) }
 static bool get_tex_dimensions(gs_texture_t *tex, uint32_t *width, uint32_t *height) { UNIMPLEMENTED_RET(false) }
 void device_set_cube_render_target(gs_device_t *device, gs_texture_t *cubetex, int side, gs_zstencil_t *zstencil) { UNIMPLEMENTED }
 void device_copy_texture_region(gs_device_t *device, gs_texture_t *dst, uint32_t dst_x, uint32_t dst_y, gs_texture_t *src, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h) { UNIMPLEMENTED }

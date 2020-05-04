@@ -7,6 +7,7 @@ set(libobs-cpu_HEADERS
 
 set(libobs-cpu_SOURCES
 		cpu-subsystem.c
+		cpu-operations.cpp
 		cpu-x11.c)
 
 add_library(libobs-cpu SHARED

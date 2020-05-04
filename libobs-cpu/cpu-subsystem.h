@@ -23,6 +23,10 @@
 #include <graphics/device-exports.h>
 #include <graphics/matrix4.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct gs_vertex_buffer {
 	struct gs_vb_data *data;
 };
@@ -121,6 +125,9 @@ struct gs_device {
 };
 
 size_t cpu_tex_data_size(gs_texture_t *tex);
+void cpu_blit_texture(gs_texture_t *src, gs_texture_t *dst,
+					  int64_t src_x, int64_t src_y, int64_t src_width, int64_t src_height,
+					  int64_t dst_x, int64_t dst_y, int64_t dst_width, int64_t dst_height);
 bool cpu_platform_init_swapchain(struct gs_swap_chain *swap);
 void cpu_platform_fini_swapchain(struct gs_swap_chain *swap);
 void cpu_platform_resize_swapchain(struct gs_swap_chain *swap, uint32_t width, uint32_t height);
@@ -129,3 +136,7 @@ void cpu_platform_destroy(struct cpu_platform *plat);
 void cpu_platform_blit(struct gs_device *device, gs_texture_t *src,
 					   size_t src_x, size_t src_y, size_t src_width, size_t src_height,
 					   size_t dst_x, size_t dst_y, size_t dst_width, size_t dst_height);
+
+#ifdef __cplusplus
+}
+#endif
