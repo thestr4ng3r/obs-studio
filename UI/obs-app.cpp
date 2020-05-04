@@ -1270,12 +1270,17 @@ void OBSApp::AppInit()
 		throw "Failed to create profile directories";
 }
 
+#define USE_CPU 1
+
 const char *OBSApp::GetRenderModule() const
 {
+#if USE_CPU
+	return "libobs-cpu";
+#else
 	const char *renderer =
 		config_get_string(globalConfig, "Video", "Renderer");
-
-	return "libobs-cpu"; //(astrcmpi(renderer, "Direct3D 11") == 0) ? DL_D3D11 : DL_OPENGL;
+	return (astrcmpi(renderer, "Direct3D 11") == 0) ? DL_D3D11 : DL_OPENGL;
+#endif
 }
 
 static bool StartupOBS(const char *locale, profiler_name_store_t *store)

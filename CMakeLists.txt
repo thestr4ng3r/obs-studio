@@ -234,7 +234,7 @@ if(NOT INSTALLER_RUN)
 		add_subdirectory(libobs-winrt)
 	endif()
 
-	#add_subdirectory(libobs-opengl)
+	add_subdirectory(libobs-opengl)
 	add_subdirectory(libobs-cpu)
 	add_subdirectory(libobs)
 	add_subdirectory(plugins)

@@ -305,6 +305,7 @@ bool gs_texture_map(gs_texture_t *tex, uint8_t **ptr, uint32_t *linesize)
 {
 	*ptr = tex->data;
 	*linesize = tex->width * gs_get_format_bpp(tex->color_format) / 8;
+	return true;
 }
 
 void gs_texture_unmap(gs_texture_t *tex)
@@ -365,7 +366,7 @@ enum gs_color_format gs_stagesurface_get_color_format(const gs_stagesurf_t *stag
 
 bool gs_stagesurface_map(gs_stagesurf_t *stagesurf, uint8_t **data, uint32_t *linesize)
 {
-	gs_texture_map(stagesurf->tex, data, linesize);
+	return gs_texture_map(stagesurf->tex, data, linesize);
 }
 
 void gs_stagesurface_unmap(gs_stagesurf_t *stagesurf)
